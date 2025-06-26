@@ -3,17 +3,18 @@
 require('dotenv').config();
 const express    = require('express');
 const mongoose   = require('mongoose');
-const bodyParser = require('body-parser');
+const crypto     = require('crypto');
 const cors       = require('cors');
+const nodemailer = require('nodemailer');
 
-const Booking    = require('./models/Booking');
+const Booking = require('./models/Booking');
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 5000;
 
 // ===== Middleware =====
-app.use(cors());                       // Enable CORS for all origins
-app.use(bodyParser.json());            // Parse JSON request bodies
+app.use(cors());
+app.use(express.json());
 
 // ===== Connect to MongoDB =====
 mongoose
@@ -22,24 +23,23 @@ mongoose
     useUnifiedTopology: true
   })
   .then(() => console.log('✅ Connected to MongoDB'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// ===== Routes =====
+// ===== Set up Gmail transporter =====
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS
+  }
+});
 
-// 1. Create a new booking
-//    POST /api/bookings
+// ===== 1. Create a new booking =====
 app.post('/api/bookings', async (req, res) => {
   try {
-    // Generate a refId if not provided (for Paystack flow, refId equals paymentId)
     const { paymentId, ...rest } = req.body;
     const refId = rest.refId || paymentId;
-
-    const newBooking = new Booking({
-      refId,
-      paymentId,
-      ...rest
-    });
-
+    const newBooking = new Booking({ refId, paymentId, ...rest });
     await newBooking.save();
     return res.status(201).json(newBooking);
   } catch (error) {
@@ -48,23 +48,43 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// 2. Paystack webhook endpoint
-//    POST /api/bookings/webhook/paystack
+// ===== 2. Paystack webhook endpoint =====
 app.post('/api/bookings/webhook/paystack', async (req, res) => {
+  console.log('📬 Webhook hit with payload:', JSON.stringify(req.body).slice(0,200));
   const event = req.body;
 
-  // A simple signature check could be added here using PAYSTACK_SECRET, 
-  // but for now we just trust the payload (in production, verify the signature).
   if (event.event === 'charge.success') {
     const reference = event.data.reference;
     try {
+      // 1) Update booking status
       const booking = await Booking.findOneAndUpdate(
         { paymentId: reference },
         { status: 'paid' },
         { new: true }
       );
+
       if (booking) {
         console.log(`Booking ${booking._id} updated to paid.`);
+
+        // DEBUG: log mailOptions then attempt send
+        const mailOptions = {
+          from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
+          to:   booking.email,
+          subject: 'Your Mass Booking is Confirmed',
+          text: `Hello ${booking.name}, your booking is confirmed!`
+        };
+        console.log('➤ [DEBUG] mailOptions:', {
+          from: mailOptions.from,
+          to:   mailOptions.to,
+          subject: mailOptions.subject
+        });
+
+        try {
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent: ${info.messageId}`);
+        } catch (mailErr) {
+          console.error('❌ Error sending email:', mailErr);
+        }
       } else {
         console.log(`No booking found with paymentId ${reference}.`);
       }
@@ -72,40 +92,22 @@ app.post('/api/bookings/webhook/paystack', async (req, res) => {
       console.error('Error updating booking status:', err);
     }
   }
-  // Respond quickly to Paystack
-  return res.status(200).send('Webhook received');
+
+  // Acknowledge receipt
+  res.status(200).send('Webhook received');
 });
 
-// 3. (Optional) Get bookings by status
-//    GET /api/bookings?status=office_pending
+
+// ===== 3. List bookings =====
 app.get('/api/bookings', async (req, res) => {
   const { status } = req.query;
   try {
-    const filter = status ? { status } : {};
+    const filter   = status ? { status } : {};
     const bookings = await Booking.find(filter).sort({ createdAt: -1 });
     return res.json(bookings);
   } catch (err) {
     console.error('Error fetching bookings:', err);
     return res.status(500).json({ message: err.message });
-  }
-});
-
-// 4. Verify office‐payment manually (PATCH)
-//    PATCH /api/bookings/:id/verify
-app.patch('/api/bookings/:id/verify', async (req, res) => {
-  try {
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: 'paid' },
-      { new: true }
-    );
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-    return res.json(booking);
-  } catch (error) {
-    console.error('Error verifying booking:', error);
-    return res.status(400).json({ message: error.message });
   }
 });
 
