@@ -48,13 +48,11 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// 2. Paystack webhook endpoint
-//    POST /api/bookings/webhook/paystack
+// ===== 2. Paystack webhook endpoint =====
 app.post('/api/bookings/webhook/paystack', async (req, res) => {
+  console.log('📬 Webhook hit w/ payload:', JSON.stringify(req.body).slice(0,200));
   const event = req.body;
 
-  // A simple signature check could be added here using PAYSTACK_SECRET, 
-  // but for now we just trust the payload (in production, verify the signature).
   if (event.event === 'charge.success') {
     const reference = event.data.reference;
     try {
@@ -63,18 +61,41 @@ app.post('/api/bookings/webhook/paystack', async (req, res) => {
         { status: 'paid' },
         { new: true }
       );
-      if (booking) {
-        console.log(`Booking ${booking._id} updated to paid.`);
+      if (!booking) {
+        console.log(`❓ No booking for paymentId ${reference}`);
       } else {
-        console.log(`No booking found with paymentId ${reference}.`);
+        console.log(`✔️ Booking ${booking._id} updated to paid.`);
+
+        // DEBUG: mailOptions
+        const mailOptions = {
+          from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
+          to:   booking.email,
+          subject: 'Your Mass Booking is Confirmed',
+          text: `Hello ${booking.name}, your booking is confirmed!`
+        };
+        console.log('➤ [DEBUG] mailOptions:', {
+          from: mailOptions.from,
+          to:   mailOptions.to,
+          subj: mailOptions.subject
+        });
+
+        try {
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent: ${info.messageId}`);
+        } catch (mailErr) {
+          console.error('❌ Error sending email:', mailErr);
+        }
       }
     } catch (err) {
-      console.error('Error updating booking status:', err);
+      console.error('❌ Error in webhook handler:', err);
     }
+  } else {
+    console.log('⚠️ Webhook received but event != charge.success:', event.event);
   }
-  // Respond quickly to Paystack
-  return res.status(200).send('Webhook received');
+
+  res.status(200).send('Webhook received');
 });
+
 
 // 3. (Optional) Get bookings by status
 //    GET /api/bookings?status=office_pending
