@@ -67,12 +67,47 @@ app.post('/api/bookings/webhook/paystack', async (req, res) => {
         console.log(`Booking ${booking._id} updated to paid.`);
 
         // DEBUG: log mailOptions then attempt send
-        const mailOptions = {
-          from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
-          to:   booking.email,
-          subject: 'Your Mass Booking is Confirmed',
-          text: `Hello ${booking.name}, your booking is confirmed!`
-        };
+     // inside your webhook, where you build mailOptions
+const mailOptions = {
+  from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
+  to:   booking.email,
+  subject: '📖 Your Mass Booking is Confirmed!',
+  replyTo: process.env.GMAIL_USER,
+  text: `
+Hi ${booking.name},
+
+Thank you for your booking with St. Catherine Parish.
+
+Reference ID : ${booking.refId}
+Date         : ${new Date(booking.startDate).toLocaleDateString()}${booking.endDate ? ' to ' + new Date(booking.endDate).toLocaleDateString() : ''}
+Time         : ${booking.time}
+Amount Paid  : ₦${booking.amount}
+Intentions   : ${booking.intention}
+
+If you have any questions, reply to this email .
+
+God bless,
+St. Catherine Parish
+  `,
+  html: `
+    <div style="font-family:Arial,sans-serif;line-height:1.4;color:#333;">
+      <h2 style="color:#0A5A44;">Your Mass Booking is Confirmed!</h2>
+      <p>Dear <strong>${booking.name}</strong>,</p>
+      <p>Thank you for your booking with <em>St. Catherine Parish</em>. Below are your booking details:</p>
+      <table cellpadding="5" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr><td><strong>Reference ID:</strong></td><td>${booking.refId}</td></tr>
+        <tr><td><strong>Date:</strong></td><td>${new Date(booking.startDate).toLocaleDateString()}${booking.endDate ? ' – ' + new Date(booking.endDate).toLocaleDateString() : ''}</td></tr>
+        <tr><td><strong>Time:</strong></td><td>${booking.time}</td></tr>
+        <tr><td><strong>Amount Paid:</strong></td><td>₦${booking.amount}</td></tr>
+        <tr><td><strong>Intentions:</strong></td><td>${booking.intention}</td></tr>
+      </table>
+      <p>If you have any questions, feel free to reply to this email </p>
+      <p>May God bless you!</p>
+      <p style="margin-top:2rem;color:#555;font-size:0.85rem;">St. Catherine Parish | <a href="https://stcatherine-alakuko.netlify.app">stcatherine-alakuko.org</a></p>
+    </div>
+  `
+};
+
         console.log('➤ [DEBUG] mailOptions:', {
           from: mailOptions.from,
           to:   mailOptions.to,
