@@ -133,18 +133,29 @@ St. Catherine Parish
 });
 
 
-// ===== 3. List bookings =====
+// index.js (excerpt)
+
+// 3. List bookings, filter by status AND optional date range
 app.get('/api/bookings', async (req, res) => {
-  const { status } = req.query;
+  const { status, dateFrom, dateTo } = req.query;
   try {
-    const filter   = status ? { status } : {};
-    const bookings = await Booking.find(filter).sort({ createdAt: -1 });
+    const filter = {};
+    if (status) filter.status = status;
+
+    if (dateFrom || dateTo) {
+      filter.startDate = {};
+      if (dateFrom) filter.startDate.$gte = new Date(dateFrom);
+      if (dateTo)   filter.startDate.$lte = new Date(dateTo);
+    }
+
+    const bookings = await Booking.find(filter).sort({ startDate: 1 });
     return res.json(bookings);
   } catch (err) {
     console.error('Error fetching bookings:', err);
     return res.status(500).json({ message: err.message });
   }
 });
+
 
 // ===== Start Server =====
 app.listen(PORT, () => {
