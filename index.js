@@ -66,14 +66,13 @@ app.post('/api/bookings/webhook/paystack', async (req, res) => {
       if (booking) {
         console.log(`Booking ${booking._id} updated to paid.`);
 
-        // DEBUG: log mailOptions then attempt send
-     // inside your webhook, where you build mailOptions
-const mailOptions = {
-  from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
-  to:   booking.email,
-  subject: '📖 Your Mass Booking is Confirmed!',
-  replyTo: process.env.GMAIL_USER,
-  text: `
+        // Build confirmation email
+        const mailOptions = {
+          from: `"St. Catherine Parish" <${process.env.GMAIL_USER}>`,
+          to:   booking.email,
+          subject: '📖 Your Mass Booking is Confirmed!',
+          replyTo: process.env.GMAIL_USER,
+          text: `
 Hi ${booking.name},
 
 Thank you for your booking with St. Catherine Parish.
@@ -84,12 +83,12 @@ Time         : ${booking.time}
 Amount Paid  : ₦${booking.amount}
 Intentions   : ${booking.intention}
 
-If you have any questions, reply to this email .
+If you have any questions, reply to this email.
 
 God bless,
 St. Catherine Parish
-  `,
-  html: `
+          `,
+          html: `
     <div style="font-family:Arial,sans-serif;line-height:1.4;color:#333;">
       <h2 style="color:#0A5A44;">Your Mass Booking is Confirmed!</h2>
       <p>Dear <strong>${booking.name}</strong>,</p>
@@ -101,12 +100,12 @@ St. Catherine Parish
         <tr><td><strong>Amount Paid:</strong></td><td>₦${booking.amount}</td></tr>
         <tr><td><strong>Intentions:</strong></td><td>${booking.intention}</td></tr>
       </table>
-      <p>If you have any questions, feel free to reply to this email </p>
+      <p>If you have any questions, feel free to reply to this email.</p>
       <p>May God bless you!</p>
       <p style="margin-top:2rem;color:#555;font-size:0.85rem;">St. Catherine Parish | <a href="https://stcatherine-alakuko.netlify.app">stcatherine-alakuko.org</a></p>
     </div>
   `
-};
+        };
 
         console.log('➤ [DEBUG] mailOptions:', {
           from: mailOptions.from,
@@ -132,10 +131,7 @@ St. Catherine Parish
   res.status(200).send('Webhook received');
 });
 
-
-// index.js (excerpt)
-
-// 3. List bookings, filter by status AND optional date range
+// ===== 3. List bookings, filter by status AND optional date range =====
 app.get('/api/bookings', async (req, res) => {
   const { status, dateFrom, dateTo } = req.query;
   try {
@@ -156,6 +152,19 @@ app.get('/api/bookings', async (req, res) => {
   }
 });
 
+// ===== 4. Delete a booking =====
+app.delete('/api/bookings/:id', async (req, res) => {
+  try {
+    const result = await Booking.findByIdAndDelete(req.params.id);
+    if (!result) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    return res.json({ message: 'Booking deleted (cannot be recovered)' });
+  } catch (err) {
+    console.error('Error deleting booking:', err);
+    return res.status(500).json({ message: err.message });
+  }
+});
 
 // ===== Start Server =====
 app.listen(PORT, () => {
