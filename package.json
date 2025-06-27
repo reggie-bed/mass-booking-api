@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -13,7 +15,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/reggie-bed/mass-booking-api/issues"
   },
@@ -23,16 +24,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "mongoose": "^8.15.1"
+    "mongoose": "^8.15.1",
+    "nodemailer": "^6.9.4"
   }
-
-"dependencies": {
-  "cors": "^2.8.5",
-  "dotenv": "^16.0.0",
-  "express": "^4.18.2",
-  "mongoose": "^7.0.0",
-  "nodemailer": "^6.9.4"
 }
-
-}
-
