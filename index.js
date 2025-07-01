@@ -92,7 +92,7 @@ St. Catherine Parish
   return res.status(200).send('Webhook received');
 });
 
-// ===== 3. List bookings with status & proper date-range overlap =====
+// 3. List bookings, filter by status AND only those overlapping [dateFrom, dateTo]
 app.get('/api/bookings', async (req, res) => {
   const { status, dateFrom, dateTo } = req.query;
 
@@ -102,22 +102,18 @@ app.get('/api/bookings', async (req, res) => {
       filter.status = status;
     }
 
-    // if either dateFrom or dateTo specified, only include bookings that:
-    //  - start inside the range
-    //  - OR end inside the range
-    //  - OR span the entire range
     if (dateFrom || dateTo) {
-      const from = dateFrom ? new Date(dateFrom) : new Date(0);
-      // add 23:59:59 to `to` so same-day works intuitively:
-      const to   = dateTo
+      // normalize our window
+      const from = dateFrom
+        ? new Date(dateFrom)
+        : new Date(0);
+      const to = dateTo
         ? new Date(new Date(dateTo).setHours(23,59,59,999))
         : new Date('9999-12-31');
 
-      filter.$or = [
-        { startDate: { $gte: from, $lte: to } },
-        { endDate:   { $gte: from, $lte: to } },
-        { startDate: { $lte: from }, endDate: { $gte: to } }
-      ];
+      // only bookings whose [startDate, endDate] overlaps [from, to]
+      filter.startDate = { $lte: to };
+      filter.endDate   = { $gte: from };
     }
 
     const bookings = await Booking.find(filter).sort({ startDate: 1 });
